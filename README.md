@@ -1,2 +1,2 @@
 # EsportsEarnings API
- An API that connects to SQLite3 database
+ An Flask-Restful API that connects to SQLite3 database
