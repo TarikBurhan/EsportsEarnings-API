@@ -10,28 +10,17 @@ api = Api(app)
 table_content_args = reqparse.RequestParser()
 table_content_args.add_argument('columns', type=str)
 
-register_args = reqparse.RequestParser()
-register_args.add_argument('name', type=str, location='form', required=True, help='Name has to be given (name)')
-register_args.add_argument('surname', type=str, location='form', required=True, help='Surname has to be given (surname)')
-register_args.add_argument('birthDate', type=str, location='form', required=False)
-register_args.add_argument('gender', type=str, location='form', required=False)
-register_args.add_argument('nationality', type=str, location='form', required=False)
-register_args.add_argument('email', type=str, location='form', required=True, help='E-Mail address has to be given (email)')
-register_args.add_argument('password', type=str, location='form', required=True, help='Password has to be given (password)')
-register_args.add_argument('profilepic', type=werkzeug.datastructures.FileStorage, location='files', required=False)
-register_args.add_argument('userDesc', type=str, location='form', required=False)
-
 user_args = reqparse.RequestParser()
-user_args.add_argument('name', type=str, location='form', required=False, help='Name has to be given (name)')
-user_args.add_argument('surname', type=str, location='form', required=False, help='Surname has to be given (surname)')
-user_args.add_argument('birthDate', type=str, location='form', required=False)
-user_args.add_argument('gender', type=str, location='form', required=False)
-user_args.add_argument('nationality', type=str, location='form', required=False)
-user_args.add_argument('email', type=str, location='form', required=True, help='E-Mail address has to be given (email)')
-user_args.add_argument('password', type=str, location='form', required=True, help='Password has to be given (password)')
+user_args.add_argument('name', type=str, required=False, help='Name has to be given (name)')
+user_args.add_argument('surname', type=str, required=False, help='Surname has to be given (surname)')
+user_args.add_argument('birthDate', type=str, required=False)
+user_args.add_argument('gender', type=str, required=False)
+user_args.add_argument('nationality', type=str, required=False)
+user_args.add_argument('email', type=str, required=True, help='E-Mail address has to be given (email)')
+user_args.add_argument('password', type=str, required=True, help='Password has to be given (password)')
 user_args.add_argument('profilepic', type=werkzeug.datastructures.FileStorage, location='files', required=False)
-user_args.add_argument('userDesc', type=str, location='form', required=False)
-user_args.add_argument('newpassword', type=str, location='form', required=False)
+user_args.add_argument('userDesc', type=str, required=False)
+user_args.add_argument('newpassword', type=str, required=False)
 
 class TableNames(Resource):
     def get(self):
@@ -59,16 +48,6 @@ class TableContentsAll(Resource):
         except:
             return abort(400, description='This table does not exists. For more information look /tableinfo')
 
-
-class Register(Resource):
-    def post(self):
-        args = register_args.parse_args()
-        myDB = MySqliteDatabase()
-        result = myDB.register(name=args['name'], surname=args['surname'], email=args['email'], password=args['password'],
-                                profilepic=args['profilepic'].read())
-        return ({"Result": f"{args['email']} has been registered."}, 201) if result else ({"Result": "This user already exists."}, 409)
-
-
 class User(Resource):
     def get(self):
         args = user_args.parse_args()
@@ -84,7 +63,7 @@ class User(Resource):
     def delete(self):
         args = user_args.parse_args()
         myDB = MySqliteDatabase()
-        result = myDB.delete(args['email'], args['password'])
+        result = myDB.deleteUser(args['email'], args['password'])
         print(result)
         if result == 0:
             return ({"Result": "This account does not exist."}, 404)
@@ -95,12 +74,41 @@ class User(Resource):
 
     def post(self):
         args = user_args.parse_args()
+        myDB = MySqliteDatabase()
+        result = myDB.register(email=args['email'], password=args['password'],
+                                name=args['name'] if args['name'] != None else None, 
+                                surname=args['surname'] if args['surname'] != None else None, 
+                                profilepic=args['profilepic'].read() if args['profilepic'] != None else None,
+                                nationality=args['nationality'] if args['nationality'] != None else None,
+                                birth_date=args['birthDate'] if args['birthDate'] != None else None,
+                                gender=args['gender'] if args['gender'] != None else None,
+                                description=args['userDesc'] if args['userDesc'] != None else None)
+        
+        return ({"Result": f"{args['email']} has been registered."}, 201) if result else ({"Result": "This user already exists."}, 409)
+
+    def put(self):
+        args = user_args.parse_args()
+        myDB = MySqliteDatabase()
+        result = myDB.changeUserElements(email=args['email'], password=args['password'], 
+                                            new_password=args['newpassword'] if args['newpassword'] != None else None,
+                                            name=args['name'] if args['name'] != None else None, 
+                                            surname=args['surname'] if args['surname'] != None else None, 
+                                            profilepic=args['profilepic'].read() if args['profilepic'] != None else None,
+                                            nationality=args['nationality'] if args['nationality'] != None else None,
+                                            birth_date=args['birthDate'] if args['birthDate'] != None else None,
+                                            gender=args['gender'] if args['gender'] != None else None,
+                                            description=args['userDesc'] if args['userDesc'] != None else None)
+        if result == 0:
+            return ({"Result": "This account does not exist."}, 404)
+        elif result == 1:
+            return ({"Result": "Successfully changed the informations."}, 200)
+        else:
+            return ({"Result": "Wrong password, nothing changed."}, 401)
         
 
 api.add_resource(TableNames, '/tableinfo')
 api.add_resource(TableColumnNames, '/tableinfo/<string:table_name>')
 api.add_resource(TableContentsAll, '/contents/<string:table_name>')
-api.add_resource(Register, '/register')
 api.add_resource(User, '/user')
 
 if __name__ == '__main__':
