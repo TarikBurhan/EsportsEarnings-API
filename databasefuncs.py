@@ -1,7 +1,9 @@
 import sqlite3
 import pandas as pd
 from hashlib import sha256 as hasher
-import base64
+from base64 import b64decode, b64encode
+from typing import Any
+
 
 def create_hash(password):
     pw_bytestring = password.encode()
@@ -95,21 +97,21 @@ class MySqliteDatabase:
             table_content.append(dict(zip(columns, list)))
         return table_content
 
-    def register(self, name:str, surname:str, email:str, password:str, profilepic:bytes, 
-                 nationality=None, birthDate=None, gender=None, description=None) -> bool:
+    def register(self, name:str, surname:str, email:str, password:str, profilepic:bytes=None, 
+                 nationality=None, birth_date=None, gender=None, description=None) -> bool:
         """
         Return booelan value corresponding to registration of user with given parameters.
         """
         cur = self.conn.cursor()
-        userExists = cur.execute("SELECT count(email) FROM LoginTable WHERE email=?", (email, )).fetchone()[0] != 0
-        if userExists:
+        user_exists = cur.execute("SELECT count(email) FROM LoginTable WHERE email=?", (email, )).fetchone()[0] != 0
+        if user_exists:
             cur.close()
             return False
         else:
             cur.execute("""INSERT INTO LoginTable (name, surname, birthDate, gender, nationality, 
                                 email, password, isAdmin, profilePic, userDesc) 
                                 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", 
-                                (name, surname, birthDate, gender, nationality, email, 
+                                (name, surname, birth_date, gender, nationality, email, 
                                  create_hash(password), 0, profilepic, description))
             cur.fetchall()
             self.conn.commit()
@@ -124,8 +126,8 @@ class MySqliteDatabase:
         Returns an integer, 0: User is not registered, 1: Login Successful, 2: Incorrect password
         """
         cur = self.conn.cursor()
-        userExists = cur.execute("SELECT count(email) FROM LoginTable WHERE email=?", (email, )).fetchone()[0] != 0
-        if not userExists:
+        user_exists = cur.execute("SELECT count(email) FROM LoginTable WHERE email=?", (email, )).fetchone()[0] != 0
+        if not user_exists:
             return 0 
         
         hash_pw = create_hash(password)
@@ -136,7 +138,7 @@ class MySqliteDatabase:
         cur.close()
         return 1
 
-    def delete(self, email:str, password:str) -> int:
+    def deleteUser(self, email:str, password:str) -> int:
         """
         :param email: E-Mail address
         :param password: Password 
@@ -158,21 +160,45 @@ class MySqliteDatabase:
         cur.close()
         return 1
     
-    def post(self, email:str, password:str, arguments:dict) -> int:
-        
-        pass
+    def changeUserElements(self,email:str, password:str, new_password:str=None, name:str=None, surname:str=None, 
+                           profilepic:bytes=None, nationality=None, birth_date=None, gender=None, 
+                           description=None) -> int:
+        cur = self.conn.cursor()
+        user_exists = cur.execute("SELECT count(email) FROM LoginTable WHERE email=?", (email, )).fetchone()[0] != 0
+        if not user_exists:
+            return 0
 
+        hash_pw = create_hash(password)
+        self.conn.text_factory = bytes
+        user = cur.execute("SELECT * FROM LoginTable WHERE email=?", (email, )).fetchone()
+        self.conn.text_factory = Any
 
-    """def kwargsexmple(self, table_name, **kwargs):
-        keys, values = [], []
-        for key, value in kwargs.items():
-            keys.append(key)
-            values.append(values)
+        user_name = user[1].decode('utf-8') if user[1] != None else None
+        user_surname = user[2].decode('utf-8') if user[2] != None else None
+        user_birth_date = user[3].decode('utf-8') if user[3] != None else None
+        user_gender = user[4].decode('utf-8') if user[4] != None else None
+        user_nationality = user[5].decode('utf-8') if user[5] != None else None
+        user_password = user[7].decode('utf-8')
+        user_profile_pic = b64encode(user[9]).decode('utf-8') if user[9] != None else None
+        user_description = user[10].decode('utf-8') if user[10] != None else None
+        if hash_pw != user_password:
+            return 2
 
-        columns = self.getColumnNames(table_name)
-        for key in keys:
-            if key not in columns:
-                index = keys.index(key)
-                keys.pop(index)
-                values.pop(index)"""
+        hash_password = create_hash(new_password) if new_password != None else hash_pw
+        print(hash_password)
+        print(new_password)
+        cur.execute("""UPDATE LoginTable SET name=?, surname=?, birthDate=?, gender=?, nationality=?,
+                        password=?, profilePic=?, userDesc=? WHERE email=?""", 
+                        (name if name != None else user_name, 
+                            surname if surname != None else user_surname,
+                            birth_date if birth_date != None else user_birth_date,
+                            gender if gender != None else user_gender,
+                            nationality if nationality != None else user_nationality,
+                            hash_password,
+                            b64decode(profilepic) if profilepic != None else b64decode(user_profile_pic),
+                            description if description != None else user_description,
+                            email, ))
+        self.conn.commit()
+        cur.close()
+        return 1
         
